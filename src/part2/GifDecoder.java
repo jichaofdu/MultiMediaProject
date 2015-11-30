@@ -1,30 +1,39 @@
 package part2;
+import java.awt.image.BufferedImage;
+import java.awt.image.WritableRaster;
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
+import javax.imageio.ImageIO;
 
 public class GifDecoder {
-	private int totalColorIndex[][]; 
-	private int localColorIndex[][][];
-	private ArrayList<Byte>[] list;
+	private FramePicture[] frames;
+	private RgbColor[] totalColorIndex; 
 	private ArrayList<Integer>[] actualCodeBeforeDecode;
 	private DataInputStream data;
 	private int dataBlockSetCount;
+	private String savePicPath = "C:\\Users\\Chao\\Desktop\\";
+	List<Word> dict;
 	
 	public GifDecoder(String fileName) throws FileNotFoundException{
-		totalColorIndex = new int[256][3];
-		localColorIndex = new int[16][256][3];
+		frames = new FramePicture[16];
+		totalColorIndex = new RgbColor[256];
 		File file = new File(fileName);
 		FileInputStream is = new FileInputStream(file);
 		data = new DataInputStream(is);
-		list = new ArrayList[16];	
+		actualCodeBeforeDecode = new ArrayList[16];
 	}
 	
+
+	
 	public void teadTotalFile() throws IOException{
-		//读取gif文件头
 		String gifNoteName = "";
 		for(int i = 0;i < 6;i++){
 			byte a = data.readByte();
@@ -32,7 +41,6 @@ public class GifDecoder {
 			gifNoteName += c;
 		}
 		System.out.println("GIF署名：" + gifNoteName);
-		//读取gif的逻辑屏幕标识符
 		int widthSmall = data.readUnsignedByte();
 		int widthBig = data.readUnsignedByte();
 		int width =  ((widthBig * 256) + widthSmall);
@@ -41,7 +49,6 @@ public class GifDecoder {
 		int heightBig = data.readUnsignedByte();
 		int height =  ((heightBig * 256) + heightSmall);
 		System.out.println("逻辑屏幕高度：" + height);
-		//读取gif全局颜色列表
 		byte mcrspixel = data.readByte();
 		String mcrspixelString = Integer.toBinaryString(mcrspixel);
 		System.out.println("m cr s pixel为：" + mcrspixelString.substring(24, 32));
@@ -63,10 +70,7 @@ public class GifDecoder {
 			int r = data.readUnsignedByte();
 			int g = data.readUnsignedByte();
 			int b = data.readUnsignedByte();
-			totalColorIndex[i][0] = r;
-			totalColorIndex[i][1] = g;
-			totalColorIndex[i][2] = b;
-			//System.out.println("索引" + i + ":(" + r + "," + g + "," + b + ")");
+			totalColorIndex[i] = new RgbColor(r,g,b);
 		}
 		//进入图像数据块----------------------------各种块混杂
 		boolean flag = true;
@@ -74,18 +78,9 @@ public class GifDecoder {
 			//Step 1：检验头标识符
 			byte read = data.readByte();
 			String readString = Integer.toHexString(read);
-			//下边根据不同的头标识符来区别对待
 			if(readString.equals("3b")){
-				System.out.println("读取到gif文件终结器：" + readString);
-				System.out.println("程序结束");
-				System.out.println("图像数据集数量：" + dataBlockSetCount);
-				for(int i = 0;i < 16;i++){
-					System.out.println("第" + i + "组块大小：" + list[i].size());
-				}
 				flag = false;
 			}else if(readString.equals("21")){
-				/*当读取到 0x21 开头的时候，就认为是扩展块*/
-				//操作扩展块-Begin
 				byte secondTag = data.readByte();
 				String tag2 = Integer.toHexString(secondTag);
 				if(secondTag != 1){
@@ -96,104 +91,77 @@ public class GifDecoder {
 					data.skip(6);
 				}else if(tag2.equals("fe")){
 					System.out.println("读取到扩展块：注释-" + tag2);
-					while(data.readByte() != 0){
-						//循环直到这个块的结尾
-						//System.out.println("");
-					}
+					while(data.readByte() != 0){}
 				}else if(tag2.equals("01") || tag2.equals("1")){
 					System.out.println("读取到扩展块：图形文本-" + tag2);
-					while(data.readByte() != 0){
-						//循环直到这个块的结尾
-						//System.out.println("");
-					}
+					while(data.readByte() != 0){}
 				}else if(tag2.equals("ff")){
 					System.out.println("读取到扩展块：应用程序-" + tag2);
-					while(data.readByte() != 0){
-						//循环直到这个块的结尾
-						//System.out.println("");
-					}
+					while(data.readByte() != 0){}
 				}else{
 					System.out.println("读取到无法识别类型的扩展块：" + tag2);
-					while(data.readByte() != 0){
-						//循环直到这个块的结尾
-						//System.out.println("");
-					}
+					while(data.readByte() != 0){}
 				}
-
-				//操作扩展块-结束
 			}else if(readString.equals("2c")){
-				/*当读取到开头标识符为2C时认为读取到文件数据块*/
 				System.out.println("读取到文件数据块-------------------------------");
-				//操作文件数据块-开始
 				int xBiasSmall = data.readUnsignedByte();
 				int xBiasBig = data.readUnsignedByte();
 				int xBias = (xBiasBig * 256 + xBiasSmall);
-				System.out.println("X方向偏移量：" + xBias);
+				System.out.println("X偏移量" + xBias);
 				int yBiasSmall = data.readUnsignedByte();
 				int yBiasBig = data.readUnsignedByte();
 				int yBias = (yBiasBig * 256 + yBiasSmall);
-				System.out.println("Y方向偏移量：" + yBias);
+				System.out.println("Y偏移量" + yBias);
 				int imgWidthSmall = data.readUnsignedByte();
 				int imgWidthBig = data.readUnsignedByte();
 				int imgWidth = (imgWidthBig * 256 + imgWidthSmall);
-				System.out.println("图像宽度：" + imgWidth);
+				System.out.println("图片宽度" + imgWidth);
 				int imgHeightSmall = data.readUnsignedByte();
 				int imgHeightBig = data.readUnsignedByte();
 				int imgHeight =  (imgHeightBig * 256 + imgHeightSmall);
-				System.out.println("图像高度：" + imgHeight);
+				System.out.println("图片高度" + imgHeight);
+				frames[dataBlockSetCount] = new FramePicture(imgWidth,imgHeight,xBias,yBias);
 				byte misrpixel = data.readByte();
 				System.out.println("m i s r pixel为：" + Integer.toBinaryString(misrpixel));
 				byte mDataBlock = (byte) ((misrpixel>>7) & 1);
-				System.out.println("m i s r pixel中的m为：" + mDataBlock);
+				System.out.println("M是：" + mDataBlock);
+				frames[dataBlockSetCount].setM(mDataBlock);
 				byte iDataBlock = (byte) ((misrpixel>>6) & 1);
-				System.out.println("m i s r pixel中的i为：" + iDataBlock);
+				System.out.println("I是：" + iDataBlock);
+				frames[dataBlockSetCount].setI(iDataBlock);
 				byte sDataBlock = (byte) ((misrpixel>>5) & 1);
-				System.out.println("m i s r pixel中的s为：" + sDataBlock);
-				byte r = (byte) ((misrpixel>>3) & 3);
-				System.out.println("m i s r pixel中的r为：" + r);
+				System.out.println("S是：" + sDataBlock);
+				frames[dataBlockSetCount].setS(sDataBlock);
+				byte rDataBlock = (byte) ((misrpixel>>3) & 3);
+				System.out.println("R是：" + rDataBlock);
+				frames[dataBlockSetCount].setR(rDataBlock);
 				byte pixelDataBlock = (byte) ((misrpixel) & 7);
-				System.out.println("m i s r pixel中的pixel为：" + pixelDataBlock);
-				//获取颜色索引长度然后读取颜色列表
+				System.out.println("pixel是：" + pixelDataBlock);
+				frames[dataBlockSetCount].setPixel(pixelDataBlock);
+				int lzwLength = data.readUnsignedByte();
 				if(mDataBlock == 1){
 					int indexLengthDataBlock = 1 << (pixelDataBlock + 1); 
-					localColorIndex[dataBlockSetCount] = new int[indexLengthDataBlock][3];
 					for(int index = 0;index < indexLengthDataBlock;index++){
 						int red = data.readUnsignedByte();
 						int green = data.readUnsignedByte();
 						int blue = data.readUnsignedByte();
-						localColorIndex[dataBlockSetCount][index][0] = red;
-						localColorIndex[dataBlockSetCount][index][1] = green;
-						localColorIndex[dataBlockSetCount][index][2] = blue;
-						//System.out.println("索引" + index + ":(" + red + "," + green + "," + blue + ")");
+						frames[dataBlockSetCount].getColorPanel()[index] = new RgbColor(red,green,blue);
 					}
 				}else{
-					//如果没有局部颜色就设置其颜色数量为0
-					localColorIndex[dataBlockSetCount] = new int[0][3];
+					frames[dataBlockSetCount].setColorPanel(totalColorIndex);
 				}
-				//下边基于颜色列表的图像数据
-				int lzwCodeLength = data.readUnsignedByte();
-				System.out.println("lzw编码长度为：" + lzwCodeLength);
-				//读取一个个的数据块，但是如何判定数据库到达末尾
 				boolean dataBlockStatus = true;
-				//外循环对每个图像数据结构的总体数据块进行操纵
-				int dataBlockCount = 0;
-				list[dataBlockSetCount] = new ArrayList<Byte>();
 				while(dataBlockStatus == true){
-					//里循环对每个图像数据结构的数据块进行操作
 					int dataBlockLength = data.readUnsignedByte();
 					if(dataBlockLength == 0){
-						System.out.println("该图像数据结构的读取结束---------------------------");
 						dataBlockStatus = false;
 					}else{
-						System.out.println("数据块大小为：" + dataBlockLength + "(" + dataBlockCount + ")");
 						for(int index = 0;index < dataBlockLength;index++){
 							byte readByte = data.readByte();
-							list[dataBlockSetCount].add(readByte);
+							frames[dataBlockSetCount].readNewByte(readByte);
 						}
-						dataBlockCount++;
 					}
 				}
-				//操作文件数据块-结束
 				dataBlockSetCount++;
 			}else{
 				System.out.println("读取到了：既不是扩展块也不是LZW数据块:" + readString);
@@ -201,48 +169,152 @@ public class GifDecoder {
 		}
 	}
 	
-	/*将读取到的数据分割*/
-	public void splitCode(){
-		actualCodeBeforeDecode = new ArrayList[16];
-		String model = "00000000";
+	public void parseGif() throws IOException{
 		for(int i = 0;i < 16;i++){
-			//装截好的代码的容器
-			actualCodeBeforeDecode[i] = new ArrayList<Integer>();
-			//将之前所有字符反向连接
-			String thisPicData = "";
-			int dataLength = list[i].size();
-			for(int j = 0;j < dataLength;j++){
-				byte byteTemp = list[i].get(j);
-				String byteStringTemp = Integer.toBinaryString(byteTemp);
-				String readyToAdd = null;
-				if(byteStringTemp.length() > 8){
-					readyToAdd = byteStringTemp.substring(byteStringTemp.length() - 8, byteStringTemp.length());
-				}else if(byteStringTemp.length() == 8){
-					readyToAdd = byteStringTemp;
-				}else{
-					readyToAdd = model.substring(0, 8 - byteStringTemp.length()) + byteStringTemp;
-				}
-				thisPicData = readyToAdd + thisPicData;				
-			}
-			//这个图片的内容拼接好了，开始截取数据
-			//LogRecord.logRecord(thisPicData, "C:\\Users\\Chao\\Desktop\\out.txt");
-			int codeLength = 8 + 1;
-			int maxTopBeforeChangeCodeLength = (1 << codeLength) - 1;
-			int pointer = thisPicData.length();
-			int numOfCodeCount = 0;
-			while(pointer > 0){
-				pointer -= codeLength;
-				String innerString = thisPicData.substring(pointer, pointer + codeLength);
-				int inner = Integer.valueOf(innerString,2);
-				actualCodeBeforeDecode[i].add(inner);
-				numOfCodeCount += 1;
-				if(numOfCodeCount == maxTopBeforeChangeCodeLength || codeLength <= 12){
-					codeLength++;
-					maxTopBeforeChangeCodeLength = (1 << codeLength) - 1;
-				}
-			}			
+			splitCode(i);
+		}
+		for(int i = 0;i < 16;i++){
+			//初始化解码表
+			int iResetCode = 1 << 8;        		// clear code
+	        int iCodeSize = 8 + 1;
+	        int iFinishCode = iResetCode + 1;       // 标志着一个图像数据流的结束
+	        int iIndex = iResetCode + 2;            // 当前编码项
+	        dict = new ArrayList<Word>(iIndex);
+	        for(int j = 0; j < iIndex; j++) {
+	            Word w = new Word();
+	            w.codes.add((short) j);
+	            dict.add(w);
+	        }
+           // 解码颜色索引
+           List<Word> result = new ArrayList<Word>();
+           int old = -1;
+           int code;
+           int length = actualCodeBeforeDecode[i].size();
+           for(int j = 0;j < length;j++){
+        	   code = actualCodeBeforeDecode[i].get(j);
+               if(code == iResetCode){
+            	   iCodeSize = 8 + 1;
+                   iIndex = iResetCode + 2;
+                   continue;
+               }else if(code < iIndex){ 
+            	   Word w =  dict.get(code);
+                   result.add(w);
+                   if(old != -1){
+                	   Word nw = new Word();
+                       nw.codes.addAll(dict.get(old).codes);
+                       nw.codes.add(w.codes.get(0));
+                       dict.add(iIndex, nw);
+                       iIndex++;
+                   }
+                }else{ // not found.
+                	Word w = dict.get(old);
+                    Word nw = new Word();
+                    nw.codes.addAll(w.codes);
+                    nw.codes.add(w.codes.get(0));
+                    dict.add(iIndex, nw);
+                    result.add(nw);
+                    iIndex++;
+                }
+                old = code;
+                if(iIndex >= (1 << iCodeSize)){
+                    iCodeSize++;
+                    if (iCodeSize > 12) {
+                    	iCodeSize = 12;
+                   }
+                }
+           }
+  
+            // 从索引解析出颜色        
+            RgbColor[] colorPanel = frames[i].getColorPanel();
+            int countNum = 0;
+            for (Word w : result) {
+               for (Short s : w.codes) {
+            	   int redFinal = colorPanel[s].getRed();
+            	   int greenFinal = colorPanel[s].getGreen();
+            	   int blueFinal = colorPanel[s].getBlue();
+            	   frames[i].getPicColorList()[0] = new RgbColor(redFinal,greenFinal,blueFinal);
+                }
+            }
+
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+		}
+		for(int i = 0;i < 16;i++){
+			savePicture(i);
 		}
 	}
 	
+	/**
+	 * 
+	 * @param picIndex 当前正在对gif的哪一帧进行存储
+	 * @param colorListForPic 图片所有像素的颜色记录
+	 * @throws IOException
+	 */
+	public void savePicture(int picIndex) throws IOException{
+		File f = new File(savePicPath + picIndex + ".bmp");
+		DataOutputStream output = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(f)));
+		int[] datas = new int[545 * 473];
+		RgbColor[] colorListForPic = frames[picIndex].getPicColorList();
+		int length = colorListForPic.length;
+        for (int i = 0; i < length; i++) {
+        	RgbColor tmpC = colorListForPic[i];
+            datas[i] = (tmpC.getRed() << 16) | (tmpC.getGreen() << 8) | tmpC.getBlue();
+        }                
+        BufferedImage img = new BufferedImage(545, 473, BufferedImage.TYPE_INT_RGB);
+        WritableRaster raster = img.getRaster();
+        raster.setDataElements(0,0,545,473,datas);
+        ImageIO.write(img, "bmp", output);
+	}
 	
+	
+	/*将读取到的数据分割*/
+	public void splitCode(int picIndex){
+		String model = "00000000";
+		actualCodeBeforeDecode[picIndex] = new ArrayList<Integer>();
+		String thisPicData = "";
+		ArrayList<Byte> tempByteList = frames[picIndex].getDataList();
+		int dataLength = tempByteList.size();
+		for(int j = 0;j < dataLength;j++){
+			byte byteTemp = tempByteList.get(j);
+			String byteStringTemp = Integer.toBinaryString(byteTemp);
+			String readyToAdd = null;
+			if(byteStringTemp.length() > 8){
+				readyToAdd = byteStringTemp.substring(byteStringTemp.length() - 8, byteStringTemp.length());
+			}else if(byteStringTemp.length() == 8){
+				readyToAdd = byteStringTemp;
+			}else{
+				readyToAdd = model.substring(0, 8 - byteStringTemp.length()) + byteStringTemp;
+			}
+			thisPicData = readyToAdd + thisPicData;				
+		}
+		int codeLength = 8 + 1;
+		int maxTopBeforeChangeCodeLength = (1 << codeLength) - 1;
+		int pointer = thisPicData.length();
+		int numOfCodeCount = 0;
+		while(pointer - codeLength > 0){
+			pointer -= codeLength;
+			String innerString = thisPicData.substring(pointer, pointer + codeLength);
+			int inner = Integer.valueOf(innerString,2);
+			if(inner != 1 << 8 + 1){
+				actualCodeBeforeDecode[picIndex].add(inner);
+				numOfCodeCount += 1;
+			}else{
+				break;
+			}
+			if(numOfCodeCount == maxTopBeforeChangeCodeLength && codeLength < 12){
+				codeLength++;
+				maxTopBeforeChangeCodeLength = (1 << codeLength) - 1;
+			}
+		}			
+	}
+	
+
 }

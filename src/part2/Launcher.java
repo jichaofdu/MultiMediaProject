@@ -6,7 +6,7 @@ public class Launcher {
 		try {
 			GifDecoder gifDecoder = new GifDecoder("C:\\Users\\Chao\\Desktop\\out.gif");
 			gifDecoder.teadTotalFile();
-			gifDecoder.splitCode();
+			gifDecoder.parseGif();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
