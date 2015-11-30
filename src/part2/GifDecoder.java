@@ -10,7 +10,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 import javax.imageio.ImageIO;
 
 public class GifDecoder {
@@ -20,7 +19,8 @@ public class GifDecoder {
 	private DataInputStream data;
 	private int dataBlockSetCount;
 	private String savePicPath = "C:\\Users\\Chao\\Desktop\\";
-	List<Word> dict;
+	private int lzwLength;
+	ArrayList<Word> dictionary;
 	
 	public GifDecoder(String fileName) throws FileNotFoundException{
 		frames = new FramePicture[16];
@@ -29,6 +29,7 @@ public class GifDecoder {
 		FileInputStream is = new FileInputStream(file);
 		data = new DataInputStream(is);
 		actualCodeBeforeDecode = new ArrayList[16];
+		dictionary = new ArrayList<Word>();
 	}
 	
 
@@ -138,7 +139,6 @@ public class GifDecoder {
 				byte pixelDataBlock = (byte) ((misrpixel) & 7);
 				System.out.println("pixel是：" + pixelDataBlock);
 				frames[dataBlockSetCount].setPixel(pixelDataBlock);
-				int lzwLength = data.readUnsignedByte();
 				if(mDataBlock == 1){
 					int indexLengthDataBlock = 1 << (pixelDataBlock + 1); 
 					for(int index = 0;index < indexLengthDataBlock;index++){
@@ -150,13 +150,15 @@ public class GifDecoder {
 				}else{
 					frames[dataBlockSetCount].setColorPanel(totalColorIndex);
 				}
+				lzwLength = data.readUnsignedByte();
 				boolean dataBlockStatus = true;
 				while(dataBlockStatus == true){
 					int dataBlockLength = data.readUnsignedByte();
 					if(dataBlockLength == 0){
 						dataBlockStatus = false;
 					}else{
-						for(int index = 0;index < dataBlockLength;index++){
+						byte a = data.readByte();
+						for(int index = 0;index < dataBlockLength-1;index++){
 							byte readByte = data.readByte();
 							frames[dataBlockSetCount].readNewByte(readByte);
 						}
@@ -175,76 +177,80 @@ public class GifDecoder {
 		}
 		for(int i = 0;i < 16;i++){
 			//初始化解码表
-			int iResetCode = 1 << 8;        		// clear code
-	        int iCodeSize = 8 + 1;
-	        int iFinishCode = iResetCode + 1;       // 标志着一个图像数据流的结束
-	        int iIndex = iResetCode + 2;            // 当前编码项
-	        dict = new ArrayList<Word>(iIndex);
-	        for(int j = 0; j < iIndex; j++) {
-	            Word w = new Word();
-	            w.codes.add((short) j);
-	            dict.add(w);
-	        }
-           // 解码颜色索引
-           List<Word> result = new ArrayList<Word>();
-           int old = -1;
-           int code;
-           int length = actualCodeBeforeDecode[i].size();
-           for(int j = 0;j < length;j++){
-        	   code = actualCodeBeforeDecode[i].get(j);
-               if(code == iResetCode){
-            	   iCodeSize = 8 + 1;
-                   iIndex = iResetCode + 2;
-                   continue;
-               }else if(code < iIndex){ 
-            	   Word w =  dict.get(code);
-                   result.add(w);
-                   if(old != -1){
-                	   Word nw = new Word();
-                       nw.codes.addAll(dict.get(old).codes);
-                       nw.codes.add(w.codes.get(0));
-                       dict.add(iIndex, nw);
-                       iIndex++;
-                   }
-                }else{ // not found.
-                	Word w = dict.get(old);
-                    Word nw = new Word();
-                    nw.codes.addAll(w.codes);
-                    nw.codes.add(w.codes.get(0));
-                    dict.add(iIndex, nw);
-                    result.add(nw);
-                    iIndex++;
-                }
-                old = code;
-                if(iIndex >= (1 << iCodeSize)){
-                    iCodeSize++;
-                    if (iCodeSize > 12) {
-                    	iCodeSize = 12;
-                   }
-                }
-           }
-  
-            // 从索引解析出颜色        
-            RgbColor[] colorPanel = frames[i].getColorPanel();
-            int countNum = 0;
-            for (Word w : result) {
-               for (Short s : w.codes) {
-            	   int redFinal = colorPanel[s].getRed();
-            	   int greenFinal = colorPanel[s].getGreen();
-            	   int blueFinal = colorPanel[s].getBlue();
-            	   frames[i].getPicColorList()[0] = new RgbColor(redFinal,greenFinal,blueFinal);
-                }
-            }
+			for(int iDict = 0;iDict < (1 << lzwLength) + 2;iDict++){
+				Word newWord = new Word();
+				newWord.wordElement.add(i);
+				dictionary.add(newWord);
+			}
+			// 解码颜色索引
+			ArrayList<Word> resultWordSet = new ArrayList<Word>();
+			ArrayList<Integer> localCodeBeforeDecode = actualCodeBeforeDecode[i];
+			int readyDecodeLength = localCodeBeforeDecode.size();
+			int oldCode = -1;
+			int nowCode = -1;
+			int CHAR = -1;
+			//Input first code, store in OCODE
+			int firstCode = localCodeBeforeDecode.get(0);
+			oldCode = firstCode;
+			//Output translation of oldCode
+			Word firstWord = dictionary.get(oldCode);
+			resultWordSet.add(firstWord);
+			
+			for(int index = 1;index < readyDecodeLength;index++){
+				Word string = null;
+				//Input next code, store in NCODE
+				int code = localCodeBeforeDecode.get(i);
+				nowCode = code;
+				//Is NCODE in table?
+				int dicLength = dictionary.size();
+				if(nowCode < dicLength){
+					//Yes
+					//STRING = translation of NCODE/
+					string = dictionary.get(nowCode);
+					
+				}else{
+					//No
+					//STRING = translation of OCODE
+					string = dictionary.get(oldCode);
+					//STRING = STRING + CHAR
+					string.wordElement.add(CHAR);
+				}
+				//Output STRING
+				resultWordSet.add(string);
+				//CHAR = the first character in STRING
+				CHAR = string.wordElement.get(0);
+				//Add entry in table for OCODE + CHAR
+				Word newEntryWord = new Word();
+				Word previousSection = dictionary.get(oldCode);
+				for(int createEntry = 0;createEntry < previousSection.wordElement.size();createEntry++){
+					newEntryWord.wordElement.add(previousSection.wordElement.get(createEntry));
+				}
+				newEntryWord.wordElement.add(CHAR);
+				dictionary.add(newEntryWord);
+				//OCODE = NCODE
+				oldCode = nowCode;
+				//more codes to input?
+					//Check in the while loop.
+			}
+			
+			
+            // 从索引解析出颜色      
+			int resultLength = resultWordSet.size();
+			int xiangsuCount = 0;
+			RgbColor[] thisPicColorPane = frames[i].getColorPanel();
+            for (int resultIndex = 0;resultIndex < resultLength;resultIndex++) {
+                Word resultWord = resultWordSet.get(resultIndex);
+            	int wordLength = resultWord.wordElement.size(); 
+            	for (int intIndex = 0;intIndex < wordLength;intIndex++){
+            		RgbColor innerColor = thisPicColorPane[intIndex];
+            		int red = innerColor.getRed();
+            		int green = innerColor.getGreen();
+            		int blue = innerColor.getBlue();
+            		frames[i].setPointColor(xiangsuCount, red, green, blue);
+                    xiangsuCount++;
+                 }
+             }
 
-			
-			
-			
-			
-			
-			
-			
-			
-			
 			
 		}
 		for(int i = 0;i < 16;i++){
@@ -302,13 +308,12 @@ public class GifDecoder {
 		while(pointer - codeLength > 0){
 			pointer -= codeLength;
 			String innerString = thisPicData.substring(pointer, pointer + codeLength);
+			
 			int inner = Integer.valueOf(innerString,2);
-			if(inner != 1 << 8 + 1){
-				actualCodeBeforeDecode[picIndex].add(inner);
-				numOfCodeCount += 1;
-			}else{
-				break;
-			}
+
+			actualCodeBeforeDecode[picIndex].add(inner);
+			numOfCodeCount += 1;
+			
 			if(numOfCodeCount == maxTopBeforeChangeCodeLength && codeLength < 12){
 				codeLength++;
 				maxTopBeforeChangeCodeLength = (1 << codeLength) - 1;

@@ -87,11 +87,6 @@ public class De {
              int iCodeSize = codeSize + 1;
              int iFinishCode = iResetCode + 1;        // 标志着一个图像数据流的结束
              int iIndex = iResetCode + 2;                // 当前编码项
-//             
-//             out("iResetCode=" + iResetCode);
-//            out("iCodeSize=" + iCodeSize);
-//             out("iFinishCode=" + iFinishCode);
-//             out("iIndex=" + iIndex);
              
              // 初始化数据字典
             List<Word> dict = new ArrayList<Word>(iIndex);
@@ -167,26 +162,16 @@ public class De {
              
              
              int[] datas = new int[localWidth * localHeight];
-             
-            
-                 // 顺序
-                Color tmpC = null;
-                 for (int i = 0; i < colorList.size(); i++) {
-                     tmpC = colorList.get(i);
-                    datas[i] = (tmpC.r << 16) | (tmpC.g << 8) | tmpC.b;
-                 }                
+             Color tmpC = null;
+             for (int i = 0; i < colorList.size(); i++) {
+                 tmpC = colorList.get(i);
+                 datas[i] = (tmpC.r << 16) | (tmpC.g << 8) | tmpC.b;
+             }                
             
              
              
              // 生成图像
              BufferedImage img = new BufferedImage(localWidth, localHeight, BufferedImage.TYPE_INT_RGB);
-//             if (true) {
-//                // out("存在局部颜色列表.");
-//                 Color bg = this.colors[this.bgIndex];
-//                 Graphics2D g = (Graphics2D) img.createGraphics();
-//                 g.setBackground(new java.awt.Color(bg.r, bg.g, bg.b));
-//                g.clearRect(0, 0, this.width, this.height);
-//             }
              WritableRaster raster = img.getRaster();
             raster.setDataElements(0, 0, localWidth, localHeight, datas);
            

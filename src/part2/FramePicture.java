@@ -23,6 +23,10 @@ public class FramePicture {
 		dataList = new ArrayList<Byte>();
 	}
 	
+	public void setPointColor(int index,int r,int g,int b){
+		picColorList[index] = new RgbColor(r,g,b);
+	}
+	
 	public void readNewByte(byte newByte){
 		dataList.add(newByte);
 	}
