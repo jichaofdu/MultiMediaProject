@@ -11,20 +11,18 @@ public class FramePicture {
 	private int s;
 	private int r;
 	private int pixel;
-	private RgbColor[] colorPanel;
-	private RgbColor[] picColorList;
+	private int[] colorPanel;//Í¼Æ¬µÄµ÷É«°å
 	private ArrayList<Byte> dataList;
 	
 	public FramePicture(int width,int height,int xBias,int yBias){
 		this.width = width;
 		this.height = height;
-		picColorList = new RgbColor[width * height];
-		colorPanel = new RgbColor[256];
+		colorPanel = new int[256];
 		dataList = new ArrayList<Byte>();
 	}
 	
-	public void setPointColor(int index,int r,int g,int b){
-		picColorList[index] = new RgbColor(r,g,b);
+	public void setColorPanel(int[] newPanel){
+		this.colorPanel = newPanel;
 	}
 	
 	public void readNewByte(byte newByte){
@@ -35,16 +33,8 @@ public class FramePicture {
 		return dataList;
 	}
 	
-	public RgbColor[] getColorPanel(){
+	public int[] getColorPanel(){
 		return colorPanel;
-	}
-	
-	public void setColorPanel(RgbColor[] newList){
-		colorPanel = newList;
-	}
-	
-	public RgbColor[] getPicColorList(){
-		return picColorList;
 	}
 
 	public int getWidth() {
